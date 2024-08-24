@@ -1,0 +1,78 @@
+--ティマイオスの眼
+--The Eye of Timaeus
+local s,id=GetID()
+function s.initial_effect(c)
+	--Activate
+	local e1=Effect.CreateEffect(c)
+	e1:SetCategory(CATEGORY_SPECIAL_SUMMON)
+	e1:SetType(EFFECT_TYPE_ACTIVATE)
+	e1:SetProperty(EFFECT_FLAG_CARD_TARGET)
+	e1:SetCode(EVENT_FREE_CHAIN)
+	e1:SetCountLimit(1,id,EFFECT_COUNT_CODE_OATH)
+	e1:SetTarget(s.target)
+	e1:SetOperation(s.activate)
+	c:RegisterEffect(e1)
+	--add code
+	local e2=Effect.CreateEffect(c)
+	e2:SetType(EFFECT_TYPE_SINGLE)
+	e2:SetProperty(EFFECT_FLAG_CANNOT_DISABLE+EFFECT_FLAG_UNCOPYABLE)
+	e2:SetCode(EFFECT_ADD_CODE)
+	e2:SetValue(10000050)
+	c:RegisterEffect(e2)
+end
+s.listed_series={0x10a2}
+function s.GetSummonType(c)
+	local summon_type_table={
+		[TYPE_FUSION] = SUMMON_TYPE_FUSION,
+		[TYPE_SYNCHRO] = SUMMON_TYPE_SYNCHRO,
+		[TYPE_XYZ] = SUMMON_TYPE_XYZ,
+		[TYPE_LINK] = SUMMON_TYPE_LINK
+	}
+	return summon_type_table[c:GetType()&TYPE_EXTRA] or 0
+end
+function s.GetReasonType(c)
+	local reason_type_table={
+		[TYPE_RITUAL] = REASON_RITUAL,
+		[TYPE_FUSION] = REASON_FUSION,
+		[TYPE_SYNCHRO] = REASON_SYNCHRO,
+		[TYPE_XYZ] = REASON_XYZ,
+		[TYPE_LINK] = REASON_LINK
+	}
+	return reason_type_table[c:GetType()&TYPE_EXTRA] or 0
+end
+function s.tgfilter(c,e,tp)
+	return c:IsFaceup() and c:IsSetCard(0x10a2) and not c:IsForbidden()
+		and Duel.IsExistingMatchingCard(s.spfilter,tp,LOCATION_EXTRA,0,1,nil,e,tp,c)
+end
+function s.spfilter(c,e,tp,mc)
+	if Duel.GetLocationCountFromEx(tp,tp,mc,c)<=0 then return false end
+	local mustg=aux.GetMustBeMaterialGroup(tp,nil,tp,c,nil,s.GetReasonType(c))
+	return c:IsType(TYPE_EXTRA) and c:ListsCodeAsMaterial(mc:GetCode()) and c:IsCanBeSpecialSummoned(e,s.GetSummonType(c),tp,false,false)
+		and (#mustg==0 or (#mustg==1 and mustg:IsContains(mc)))
+end
+function s.target(e,tp,eg,ep,ev,re,r,rp,chk,chkc)
+	if chkc==0 then return chkc:IsLocation(LOCATION_MZONE) and chkc:IsControler(tp) and s.tgfilter(chkc,e,tp) end
+	if chk==0 then return Duel.IsExistingTarget(s.tgfilter,tp,LOCATION_MZONE,0,1,nil,e,tp) end
+	Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_TARGET)
+	Duel.SelectTarget(tp,s.tgfilter,tp,LOCATION_MZONE,0,1,1,nil,e,tp)
+	Duel.SetOperationInfo(0,CATEGORY_SPECIAL_SUMMON,nil,1,tp,LOCATION_EXTRA)
+end
+function s.activate(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetFirstTarget()
+	local sg=Duel.SelectMatchingCard(tp,s.spfilter,tp,LOCATION_EXTRA,0,1,1,nil,e,tp,tc)
+	local sc=sg:GetFirst()
+	if tc:IsRelateToEffect(e) and tc:IsFaceup() and tc:IsCanBeMaterial(s.GetSummonType(sc)) and not tc:IsImmuneToEffect(e) then
+		Duel.Hint(HINT_SELECTMSG,tp,HINTMSG_SPSUMMON)
+		if sc then
+			sc:SetMaterial(Group.FromCards(tc))
+				if not sc:IsType(TYPE_XYZ) then
+					Duel.SendtoGrave(tc,REASON_EFFECT+REASON_MATERIAL+s.GetReasonType(sc))
+				else
+					Duel.Overlay(sc,tc,false)
+				end
+			Duel.BreakEffect()
+			Duel.SpecialSummon(sc,s.GetSummonType(sc),tp,tp,false,false,POS_FACEUP)
+			sc:CompleteProcedure()
+		end
+	end
+end
